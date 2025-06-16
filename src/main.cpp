@@ -35,7 +35,7 @@ WiFiMulti wifiMulti;
 WiFiUDP UDP;
 WakeOnLan WOL(UDP);
 
-Discord::Bot discord(botToken);
+Discord::Bot discord(botToken, applicationId);
 
 bool botEnabled = true;
 bool broadcastAddrSet = false;

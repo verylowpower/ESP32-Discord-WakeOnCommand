@@ -24,8 +24,8 @@
 
 namespace Discord {
 
-    Bot::Bot(const char* botToken, bool enableRateLimit) :
-        _botToken { botToken }, _rateLimit { enableRateLimit } {
+    Bot::Bot(const char* botToken, uint64_t applicationId, bool enableRateLimit) :
+        _botToken { botToken }, _applicationId { applicationId }, _rateLimit { enableRateLimit } {
         _httpsMtx = xSemaphoreCreateMutex();
     }
 

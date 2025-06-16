@@ -230,7 +230,7 @@ namespace Discord {
             Flags flags = Flags::NONE;
         };
 
-        Bot(const char* botToken, bool rateLimit = true);
+        Bot(const char* botToken, uint64_t applicationId, bool rateLimit = true);
 
         void login(unsigned int intents = 0);
 
@@ -271,7 +271,7 @@ namespace Discord {
         const char* _d = "d";
         const char* _t = "t";
         const char* _botToken = nullptr;
-        uint64_t _applicationId = 1380541854096953416;
+        uint64_t _applicationId; // No initialization here
         unsigned int _intents = 0;
 
         uint64_t _interactionId;

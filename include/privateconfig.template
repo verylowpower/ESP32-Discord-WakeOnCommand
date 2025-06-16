@@ -11,6 +11,9 @@ const char* macAddress = ;
 //Secret bot token
 const char* botToken = ;
 
+// Discord Application ID
+const uint64_t applicationId = ;
+
 //Bot owner's user IDs
 uint64_t botOwnerIds[] = {
     
