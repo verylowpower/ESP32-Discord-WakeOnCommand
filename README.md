@@ -4,22 +4,16 @@
 Send a Discord command or DM, and wake a target device anywhere, anytime!
 
 ## Description
-A self-contained Discord Bot that runs on an [M5Stack Atom Lite](https://shop.m5stack.com/products/atom-lite-esp32-development-kit) and sends  a Wake-On-Lan signal to a hardcoded target device from a slash command. Built for ESP32 devices using Arduino C++.
-
-Currently the main code makes use of the M5Atom architecture for certain onboard capabilities such as LED and button control. **Expanded compatability for other ESP32 devices will come eventually.**
+A self-contained Discord Bot that runs on an ESP32 development board and sends a Wake-On-Lan signal to a hardcoded target device from a slash command. Built for ESP32 devices using Arduino C++.
 
 ## Features
 - Simple ping command to poll responsiveness
 - Wake command to send WOL packet to a specific device's MAC address
     - Limited access to specific users
-- Manual WOL packet sending via button press
 - Based on a expandable ESP32 Discord Bot framework (to be published separately)
     - Built-in command registration
-- *Cool LED status indicator*
 
 ## Dependencies
-- [M5Atom](https://github.com/m5stack/M5Atom) 0.1.0
-    - [FastLED](https://github.com/FastLED/FastLED) 3.6.0
 - [WakeOnLan](https://github.com/a7md0/WakeOnLan) 1.1.7
 - [ArduinoJson](https://github.com/bblanchon/ArduinoJson) 6.21.2
 - [arduinoWebSockets](https://github.com/Links2004/arduinoWebSockets) 2.4.1
@@ -27,31 +21,70 @@ Currently the main code makes use of the M5Atom architecture for certain onboard
 ## Installation
 1. Download the source code and open it in Visual Studio Code.
 2. Use the [PlatformIO IDE](https://platformio.org/install/ide?install=vscode) to setup dependencies and build environments, or do it manually.
-4. Configure Wifi, Discord Bot token, and your own user IDs in `privateconfig.template`, and rename the file to `privateconfig.h`.
-5. Plug in the M5Stack Atom to your PC via its USB-C port, then build and upload the code.
-6. Once the LED is green, press and hold the button for 2.5 seconds, the LED will turn purple, releasing it will let the ESP32 register the two global commands. This must be done when changes are made to the command structure.
+3. Configure Wifi, Discord Bot token, and your own user IDs in `privateconfig.template`, and rename the file to `privateconfig.h`.
+4. Plug in your ESP32 development board to your PC via USB, then build and upload the code.
+
+## Configuration (`privateconfig.h`)
+
+The `include/privateconfig.h` file stores sensitive information required for the bot to function. You must create this file by renaming `include/privateconfig.template` to `include/privateconfig.h` and then fill in your specific details.
+
+Here's the expected format:
+
+```cpp
+#ifndef PRIVATE_CONFIG_H
+#define PRIVATE_CONFIG_H
+
+// WiFi Credentials
+const char* wifiSSID = "YOUR_WIFI_SSID";
+const char* wifiPassword = "YOUR_WIFI_PASSWORD";
+
+// Discord Bot Token
+// IMPORTANT: Keep this token secure and do not share it publicly.
+const char* botToken = "YOUR_DISCORD_BOT_TOKEN";
+
+// MAC Address of the device to wake up (e.g., "00:11:22:33:44:55")
+const char* macAddress = "00:11:2A:3E:54:68"
+
+// Discord User IDs of authorized bot owners (for /wake command)
+// You can add multiple IDs: {1234567890ULL, 9876543210ULL}
+const uint64_t botOwnerIds[] = {YOUR_DISCORD_USER_ID_1ULL};
+
+#endif // PRIVATE_CONFIG_H
+```
+
+### How to Obtain Your Discord Bot Token
+
+1.  **Go to the Discord Developer Portal:** Open your web browser and navigate to [https://discord.com/developers/applications](https://discord.com/developers/applications).
+2.  **Select Your Application:** Click on the application that corresponds to your Discord bot. If you don't have one, create a "New Application".
+3.  **Navigate to the Bot Section:** In the left-hand sidebar, click on "Bot".
+4.  **Add a Bot (if necessary):** If you haven't already, click "Add Bot" and confirm.
+5.  **Reset and Copy Token:**
+    *   Under the "TOKEN" section, click the "Reset Token" button. Confirm the action if prompted.
+    *   **Immediately** click the "Copy" button to copy the *newly generated* token. This token is only shown once.
+    *   Paste this token into the `botToken` variable in your `privateconfig.h` file.
+
+### How to Obtain Your Discord User ID(s)
+
+To get your Discord User ID (and the IDs of any other users you want to authorize for the `/wake` command):
+
+1.  **Enable Developer Mode in Discord:**
+    *   Open your Discord client (desktop app or web).
+    *   Go to "User Settings" (the gear icon next to your username).
+    *   Navigate to "App Settings" -> "Advanced".
+    *   Toggle "Developer Mode" to ON.
+2.  **Copy User ID:**
+    *   Go to any Discord server or DM.
+    *   Right-click on your own username (or the username of another user whose ID you need).
+    *   Select "Copy ID".
+    *   Paste this ID into the `botOwnerIds` array in your `privateconfig.h` file. Remember to append `ULL` to the end of each ID (e.g., `123456789012345678ULL`).
 
 ## Usage
 
-Once the status light is green, the bot is online and connected to Discord. Invite it to a server and use the slash command in the server, or DM the bot.
-
-To toggle the bot's connection to Discord, press and hold for 5 seconds until the light turns amber. The blue status light means the bot is no longer connected, and the ESP32 only responds to manual button presses.
+Once the bot is online and connected to Discord, invite it to a server and use the slash command in the server, or DM the bot.
 
 ### Commands
 - `/ping` - Checks for responsiveness. The bot will reply with "Uplink online."
 - `/wake` - Sends a WOL packet to the target MAC address specified in `privateconfig.h`. This only works for the user ids specified in the file, and access will be denied for anyone else attempting to use the command.
-
-### LED Status Colours
-| Colour | Status                                                      |
-|--------|-------------------------------------------------------------|
-| White  | Initialising Wi-Fi connection.                              |
-| Red    | An error has occurred with the Wi-Fi or Discord connection. |
-| Green  | Connected to Discord, currently idle.                       |
-| Blue   | Disconnected from Discord, currently idle.                  |
-| Purple | Connecting to Discord.                                      |
-| Amber  | Processing command.                                         |
-
-The LED turns purple when receiving commands via Discord, and amber during manual operation.
 
 ### Troubleshooting
 If the LED turns red, it could be for 3 reasons:
@@ -60,7 +93,7 @@ If the LED turns red, it could be for 3 reasons:
 2. Unable to connect to Discord.
 3. The WOL packet failed to send.
 
-Plug the M5Stack Atom into a PC, reboot and check serial if needed. Using PlatformIO, the `m5stack-atom-debug` configuration defines an additional debug symbol to allow the bot to print additional debug information.
+Plug your ESP32 board into a PC, reboot and check serial if needed.
 
 ## Contributing
 
