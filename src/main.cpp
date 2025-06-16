@@ -202,7 +202,7 @@ void loop() {
 
     if (!update_wifi_status()) {
         Serial.println("[WIFI] Wi-Fi connection not established.");
-        vTaskDelay(1000);
+        vTaskDelay(10000);
         return;
     }
 
@@ -219,7 +219,7 @@ void loop() {
                 registerCommands();
                 commandsRegistered = true;
             }
-            Serial.println("[STATUS] Idle.");
+            //Serial.println("[STATUS] Idle.");
         }
         discord.update(now);
     }
