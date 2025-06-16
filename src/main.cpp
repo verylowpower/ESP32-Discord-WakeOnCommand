@@ -17,7 +17,6 @@
  */
 
 #include <Arduino.h>
-#include <M5Atom.h>
 #include <WiFiMulti.h>
 #include <WiFiUdp.h>
 #include <WakeOnLan.h>
@@ -26,14 +25,6 @@
 #include <interactions.h>
 #include <privateconfig.h>
 
- // LED Colors
-#define WHITE  0xFFFFFF //Standby
-#define RED    0x800000 //Error
-#define GREEN  0x008000 //Idle
-#define BLUE   0x000080 //Offline Idle
-#define PURPLE 0x800080 //Connecting to Discord
-#define AMBER  0xFF4000 //Executing command
-#define OFF    0x000000
 
 #define LOGIN_INTERVAL 30000 //Cannot be too short to give time to initially retrieve the gateway API
 
@@ -48,6 +39,7 @@ Discord::Bot discord(botToken);
 
 bool botEnabled = true;
 bool broadcastAddrSet = false;
+bool commandsRegistered = false; // New: Flag to track if commands have been registered
 unsigned long lastLoginAttempt = 0;
 
 bool update_wifi_status() {
@@ -69,7 +61,7 @@ bool update_wifi_status() {
 }
 
 void on_discord_interaction(const char* name, const JsonObject& interaction) {
-    M5.dis.drawpix(0, PURPLE);
+    Serial.println("[DISCORD] Interaction received.");
 
     if (strcmp(name, "ping") == 0) {
         Discord::Bot::MessageResponse response;
@@ -108,7 +100,6 @@ void on_discord_interaction(const char* name, const JsonObject& interaction) {
             }
             else {
                 Serial.println("[WOL] Packet failed to send.");
-                M5.dis.drawpix(0, RED);
             }
         }
 
@@ -161,9 +152,8 @@ void registerCommands() {
 // put your setup code here, to run once:
 void setup() {
     // Clear the serial port buffer and set the serial port baud rate to 115200.
-    // Do not Initialize I2C. Initialize the LED matrix.
-    M5.begin(true, false, true);
-    M5.dis.drawpix(0, WHITE);
+    Serial.begin(115200);
+    Serial.println("[STATUS] Standby.");
     Serial.print("[CONFIG] Target MAC address set to ");
     Serial.println(macAddress);
     Serial.print("[CONFIG] Default network set to ");
@@ -180,7 +170,6 @@ long lastHeapValue = 0;
 #endif
 
 void loop() {
-    M5.update();
     // put your main code here, to run repeatedly:
     unsigned long now = millis();
 
@@ -212,7 +201,6 @@ void loop() {
 #endif
 
     if (!update_wifi_status()) {
-        M5.dis.drawpix(0, RED);
         Serial.println("[WIFI] Wi-Fi connection not established.");
         vTaskDelay(1000);
         return;
@@ -220,51 +208,22 @@ void loop() {
 
     if (botEnabled) {
         if (!discord.online()) {
-            M5.dis.drawpix(0, PURPLE);
+            Serial.println("[STATUS] Connecting to Discord.");
             if (now > lastLoginAttempt) {
                 lastLoginAttempt = now + LOGIN_INTERVAL;
                 discord.login(4096); // DIRECT_MESSAGES
             }
         }
         else {
-            M5.dis.drawpix(0, GREEN);
+            if (!commandsRegistered) {
+                registerCommands();
+                commandsRegistered = true;
+            }
+            Serial.println("[STATUS] Idle.");
         }
         discord.update(now);
     }
     else {
-        M5.dis.drawpix(0, BLUE);
-    }
-
-    if (M5.Btn.pressedFor(5000)) {
-        M5.dis.drawpix(0, AMBER);
-    }
-    else if (M5.Btn.pressedFor(2500)) {
-        M5.dis.drawpix(0, PURPLE);
-    }
-    if (M5.Btn.wasReleasefor(5000)) {
-        botEnabled = !botEnabled;
-
-        if (!botEnabled && discord.online()) {
-            discord.logout();
-        }
-    }
-    else if (M5.Btn.wasReleasefor(2500)) {
-        if (!botEnabled) {
-            Serial.println("Bot offline, command update not performed.");
-        }
-        else {
-            registerCommands();
-        }
-    }
-    else if (M5.Btn.wasReleased()) {
-        if (WOL.sendMagicPacket(macAddress)) {
-            Serial.println("[WOL] Packet sent.");
-            M5.dis.drawpix(0, AMBER);
-        }
-        else {
-            Serial.println("[WOL] Packet failed to send.");
-            M5.dis.drawpix(0, RED);
-        }
-        vTaskDelay(100);
+        Serial.println("[STATUS] Offline Idle.");
     }
 }

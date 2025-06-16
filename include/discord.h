@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <mutex>
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -260,7 +259,7 @@ namespace Discord {
 
         bool sendWS(const char* payload, size_t length);
 
-        std::mutex _httpsMtx;
+        SemaphoreHandle_t _httpsMtx;
         HTTPClient _https;
         WebSocketsClient _socket;
         EventCallback _outerCallback;
@@ -272,7 +271,7 @@ namespace Discord {
         const char* _d = "d";
         const char* _t = "t";
         const char* _botToken = nullptr;
-        uint64_t _applicationId = 0;
+        uint64_t _applicationId = 1380541854096953416;
         unsigned int _intents = 0;
 
         uint64_t _interactionId;
@@ -310,7 +309,7 @@ namespace Discord {
             const String& json = "",
             const char* authorisationToken = "",
             std::function<void(const StaticJsonDocument<sz>& json)> cb = nullptr,
-            std::mutex* mtx = nullptr);
+            SemaphoreHandle_t* mtx = nullptr);
 
         HTTPClient& client;
         const char* method;
@@ -318,7 +317,7 @@ namespace Discord {
         const String json = "";
         const char* authorisationToken = "";
         std::function<void(const StaticJsonDocument<sz>& json)> callback;
-        std::mutex* clientMtx = nullptr;
+        SemaphoreHandle_t* clientMtx = nullptr;
     };
 
     bool sendRest(
@@ -345,7 +344,7 @@ namespace Discord {
         const String& json,
         const char* authorisationToken,
         std::function<void(const StaticJsonDocument<sz>& json)> cb,
-        std::mutex* mtx);
+        SemaphoreHandle_t* mtx);
 
     template <size_t sz>
     void sendPostTask(void* parameter);

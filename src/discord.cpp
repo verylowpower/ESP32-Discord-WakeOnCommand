@@ -17,13 +17,17 @@
  */
 
 #include <discord.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 #define DISCORD_MESSAGE_PREFIX "[DISCORD] "
 
 namespace Discord {
 
     Bot::Bot(const char* botToken, bool enableRateLimit) :
-        _botToken { botToken }, _rateLimit { enableRateLimit } {}
+        _botToken { botToken }, _rateLimit { enableRateLimit } {
+        _httpsMtx = xSemaphoreCreateMutex();
+    }
 
     void Bot::login(unsigned int intents) {
         _https.begin(DISCORD_HOST, nullptr);
@@ -142,7 +146,7 @@ namespace Discord {
                 Serial.print("Time to respond (ms): ");
                 Serial.println(end - start);
 #endif
-            }, & _httpsMtx);
+            }, &_httpsMtx);
 
         return;
     }

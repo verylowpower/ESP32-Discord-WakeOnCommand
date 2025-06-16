@@ -115,7 +115,7 @@ namespace Discord {
         const String& json,
         const char* authorisationToken,
         std::function<void(const StaticJsonDocument<sz>& json)> cb,
-        std::mutex* mtx) :
+        SemaphoreHandle_t* mtx) :
         client { httpClient },
         method { method },
         uri { uri },
@@ -132,7 +132,7 @@ namespace Discord {
         const String& json,
         const char* authorisationToken,
         std::function<void(const StaticJsonDocument<sz>& json)> cb,
-        std::mutex* mtx) {
+        SemaphoreHandle_t* mtx) {
 
         AsyncAPIRequest<sz>* request = new AsyncAPIRequest<sz>(
             httpClient, method, uri, json, authorisationToken, std::move(cb), mtx);
@@ -159,10 +159,8 @@ namespace Discord {
         AsyncAPIRequest<sz>* request = static_cast<AsyncAPIRequest<sz>*>(parameter);
 
         // Lock the HttpClient via the provided mutex if needed to avoid race conditions on multiple tasks.
-        // std::unique_lock<std::mutex> lock = (request->clientMtx == nullptr) ?
-        //     std::unique_lock<std::mutex>() : std::unique_lock<std::mutex>(*request->clientMtx);
         if (request->clientMtx) {
-            request->clientMtx->lock();
+            xSemaphoreTake(*request->clientMtx, portMAX_DELAY);
         }
 
         request->client.setURL(request->uri);
@@ -235,7 +233,7 @@ namespace Discord {
                 request->callback(response);
             }
             if (request->clientMtx) {
-                request->clientMtx->unlock();
+                xSemaphoreGive(*request->clientMtx);
             }
             delete request;
             vTaskDelete(nullptr);
@@ -243,7 +241,7 @@ namespace Discord {
 
         // Request failed
         if (request->clientMtx) {
-            request->clientMtx->unlock();
+            xSemaphoreGive(*request->clientMtx);
         }
         Serial.print("[DISCORD] Error code: ");
         Serial.println(httpResponseCode);
