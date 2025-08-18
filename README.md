@@ -85,6 +85,7 @@ Once the bot is online and connected to Discord, invite it to a server and use t
 ### Commands
 - `/ping` - Checks for responsiveness. The bot will reply with "Uplink online."
 - `/wake` - Sends a WOL packet to the target MAC address specified in `privateconfig.h`. This only works for the user ids specified in the file, and access will be denied for anyone else attempting to use the command.
+- '/wanIP' - Check WanIP
 
 ### Troubleshooting
 If the LED turns red, it could be for 3 reasons:
