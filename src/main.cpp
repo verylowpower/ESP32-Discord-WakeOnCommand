@@ -20,6 +20,8 @@
 #include <WiFiMulti.h>
 #include <WiFiUdp.h>
 #include <WakeOnLan.h>
+#include <HTTPClient.h>
+
 
 #include <discord.h>
 #include <interactions.h>
@@ -60,6 +62,21 @@ bool update_wifi_status() {
     return false;
 }
 
+String getWANIP() {
+    HTTPClient http;
+    http.begin("http://api.ipify.org"); 
+    int httpCode = http.GET();
+    String payload = "Unknown";
+
+    if (httpCode == 200) { // OK
+        payload = http.getString();
+    } else {
+        payload = "Error: " + String(httpCode);
+    }
+    http.end();
+    return payload;
+}
+
 void on_discord_interaction(const char* name, const JsonObject& interaction) {
     Serial.println("[DISCORD] Interaction received.");
 
@@ -76,7 +93,10 @@ void on_discord_interaction(const char* name, const JsonObject& interaction) {
 #else
         response.content = "Uplink online.";
 #endif
-        discord.sendCommandResponse(Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE, response);
+        discord.sendCommandResponse(
+            Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
+            response
+        );
     }
     else if (strcmp(name, "wake") == 0) {
         Discord::Bot::MessageResponse response;
@@ -94,7 +114,10 @@ void on_discord_interaction(const char* name, const JsonObject& interaction) {
 
             authorised = true;
             response.content = "Command acknowledged. Initiating remote wake sequence.";
-            discord.sendCommandResponse(Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE, response);
+            discord.sendCommandResponse(
+                Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
+                response
+            );
             if (WOL.sendMagicPacket(macAddress)) {
                 Serial.println("[WOL] Packet sent.");
             }
@@ -106,12 +129,26 @@ void on_discord_interaction(const char* name, const JsonObject& interaction) {
         if (!authorised) {
             response.content = "Access denied.";
             response.flags = Discord::Bot::MessageResponse::Flags::EPHEMERAL;
-            discord.sendCommandResponse(Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE, response);
+            discord.sendCommandResponse(
+                Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
+                response
+            );
         }
+    }
+    else if (strcmp(name, "wanip") == 0) {
+        Discord::Bot::MessageResponse response;
+        String wanIP = getWANIP();  
+        String msg = "Current WAN IP: " + wanIP;
+        response.content = msg.c_str();
+        discord.sendCommandResponse(
+            Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
+            response
+        );
     }
 
     vTaskDelay(500);
 }
+
 
 void registerCommands() {
     Serial.println("Registering commands...");
@@ -145,6 +182,21 @@ void registerCommands() {
         Serial.print("Registered wake command to id ");
         Serial.println(id);
     }
+
+    //3. /36IP
+    cmd.name = "wanip";
+    cmd.type = Discord::Interactions::CommandType::CHAT_INPUT;
+    cmd.description = "Get the current WAN IP of the ESP32.";
+    cmd.default_member_permissions = 2147483648;
+
+    id = Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
+    if (id == 0) {
+        Serial.println("Command registration failed!");
+    } else {
+        Serial.print("Registered wanip command to id ");
+        Serial.println(id);
+    }
+
 }
 
 // PROGRAM BEGIN
