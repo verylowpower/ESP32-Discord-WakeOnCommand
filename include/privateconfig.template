@@ -1,0 +1,22 @@
+#ifndef PRIVATECONFIG_H
+#define PRIVATECONFIG_H
+
+//Default wifi parameters
+const char* wifiSSID = ;
+const char* wifiPassword = ;
+
+//MAC address of the target device
+const char* macAddress = ;
+
+//Secret bot token
+const char* botToken = ;
+
+// Discord Application ID
+const uint64_t applicationId = ;
+
+//Bot owner's user IDs
+uint64_t botOwnerIds[] = {
+    
+};
+
+#endif //PRIVATECONFIG_H
