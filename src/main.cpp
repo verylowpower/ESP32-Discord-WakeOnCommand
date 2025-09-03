@@ -1,26 +1,10 @@
-/*
- * ESP32-Discord-WakeOnCommand v0.1
- * Copyright (C) 2023  Neo Ting Wei Terrence
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
 
 #include <Arduino.h>
 #include <WiFiMulti.h>
 #include <WiFiUdp.h>
 #include <WakeOnLan.h>
 #include <HTTPClient.h>
+#include <ESP32Ping.h>  
 
 
 #include <discord.h>
@@ -76,6 +60,23 @@ String getWANIP() {
     http.end();
     return payload;
 }
+
+String checkStatus(const char* name, const char* ip) {
+    static String msg;  // static để buffer không bị hủy
+    IPAddress target;
+    if (!target.fromString(ip)) {
+        msg = String("[ERROR] Invalid IP for ") + name;
+        return msg;
+    }
+
+    if (Ping.ping(target, 3)) {
+        msg = String(name) + " is ONLINE";
+    } else {
+        msg = String(name) + " is OFFLINE";
+    }
+    return msg;
+}
+
 
 void on_discord_interaction(const char* name, const JsonObject& interaction) {
     Serial.println("[DISCORD] Interaction received.");
@@ -145,6 +146,22 @@ void on_discord_interaction(const char* name, const JsonObject& interaction) {
             response
         );
     }
+    else if (strcmp(name, "pcstatus") == 0) {
+        Discord::Bot::MessageResponse response;
+        response.content = checkStatus("PC", PCTargetIP).c_str();
+        discord.sendCommandResponse(
+            Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
+            response
+        );
+    }
+    else if (strcmp(name, "psstatus") == 0) {
+        Discord::Bot::MessageResponse response;
+        response.content = checkStatus("PS", PSTargetIP).c_str();
+        discord.sendCommandResponse(
+            Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
+            response
+        );
+    }
 
     vTaskDelay(500);
 }
@@ -183,7 +200,7 @@ void registerCommands() {
         Serial.println(id);
     }
 
-    //3. /36IP
+    //3. /wanIP
     cmd.name = "wanip";
     cmd.type = Discord::Interactions::CommandType::CHAT_INPUT;
     cmd.description = "Get the current WAN IP of the ESP32.";
@@ -196,6 +213,17 @@ void registerCommands() {
         Serial.print("Registered wanip command to id ");
         Serial.println(id);
     }
+
+    // /pcstatus
+    cmd.name = "pcstatus";
+    cmd.description = "Check if PC is online or offline.";
+    Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
+
+    // /psstatus
+    cmd.name = "psstatus";
+    cmd.description = "Check if PS is online or offline.";
+    Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
+
 
 }
 

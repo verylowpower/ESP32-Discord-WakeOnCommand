@@ -1,20 +1,3 @@
-/*
- * ESP32-Discord-WakeOnCommand v0.1
- * Copyright (C) 2023  Neo Ting Wei Terrence
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
 
 #include <discord.h>
 #include <freertos/FreeRTOS.h>
@@ -247,13 +230,11 @@ namespace Discord {
 
     void Bot::parseMessage(uint8_t * payload, size_t length) {
         //Deserialize the first part of our payload
-        DynamicJsonDocument doc(2048);
-        DeserializationError e = deserializeJson(doc, payload, length);
-        if (e) {
-            Serial.print("Payload deserializeJson() call failed with code ");
-            Serial.println(e.c_str());
-            // Handle the error here, don't pass it upward.
-            return;
+        StaticJsonDocument<1024> doc;
+        DeserializationError error = deserializeJson(doc, payload, length);
+
+        if (!error) {
+            _outerCallback(Event::MessageCreate, doc);
         }
 
 #ifdef _DISCORD_CLIENT_DEBUG
