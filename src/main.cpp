@@ -1,45 +1,53 @@
-
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <WiFiMulti.h>
 #include <WiFiUdp.h>
+#include <WiFiClientSecure.h>
 #include <WakeOnLan.h>
 #include <HTTPClient.h>
-#include <ESP32Ping.h>  
-
+#include <ESP32Ping.h> 
+#include <UniversalTelegramBot.h> 
 
 #include <discord.h>
 #include <interactions.h>
 #include <privateconfig.h>
 
-
 #define LOGIN_INTERVAL 30000 //Cannot be too short to give time to initially retrieve the gateway API
-
-// This sets Arduino Stack Size - comment this line to use default 8K stack size
-//SET_LOOP_TASK_STACK_SIZE(16 * 1024); // 16KB
 
 WiFiMulti wifiMulti;
 WiFiUDP UDP;
 WakeOnLan WOL(UDP);
 
+// ===== DISCORD CONFIG =====
 Discord::Bot discord(botToken, applicationId);
 
 bool botEnabled = true;
 bool broadcastAddrSet = false;
-bool commandsRegistered = false; // New: Flag to track if commands have been registered
+bool commandsRegistered = false;
 unsigned long lastLoginAttempt = 0;
 
-bool update_wifi_status() {
+// ===== TELEGRAM CONFIG =====
+WiFiClientSecure secured_client;
+UniversalTelegramBot telegramBot(telegramToken, secured_client);
+bool telegramEnabled = false; 
+unsigned long lastTelegramMessageTime = 0;
+const unsigned long TELEGRAM_TIMEOUT = 60000;
+
+unsigned long lastCheckTime = 0;
+const unsigned long botPollingInterval = 2000;
+
+// ===== COMMON FUNCTIONS =====
+bool update_wifi_status() 
+{
     if (wifiMulti.run() == WL_CONNECTED) {
         if (broadcastAddrSet) return true;
 
-        // Attention: 255.255.255.255 is denied in some networks
         IPAddress broadcastAddr = WOL.calculateBroadcastAddress(WiFi.localIP(), WiFi.subnetMask());
         Serial.print("[WIFI] Broadcast address set to ");
         broadcastAddr.printTo(Serial);
         Serial.println();
         broadcastAddrSet = true;
         Serial.println("[WIFI] Wi-Fi connection established.");
-
         return true;
     }
     broadcastAddrSet = false;
@@ -52,7 +60,7 @@ String getWANIP() {
     int httpCode = http.GET();
     String payload = "Unknown";
 
-    if (httpCode == 200) { // OK
+    if (httpCode == 200) {
         payload = http.getString();
     } else {
         payload = "Error: " + String(httpCode);
@@ -62,14 +70,14 @@ String getWANIP() {
 }
 
 String checkStatus(const char* name, const char* ip) {
-    static String msg;  // static để buffer không bị hủy
+    static String msg;
     IPAddress target;
     if (!target.fromString(ip)) {
         msg = String("[ERROR] Invalid IP for ") + name;
         return msg;
     }
 
-    if (Ping.ping(target, 3)) {
+    if (Ping.ping(target, 1)) {
         msg = String(name) + " is ONLINE";
     } else {
         msg = String(name) + " is OFFLINE";
@@ -77,23 +85,13 @@ String checkStatus(const char* name, const char* ip) {
     return msg;
 }
 
-
+// ===== DISCORD HANDLER =====
 void on_discord_interaction(const char* name, const JsonObject& interaction) {
     Serial.println("[DISCORD] Interaction received.");
 
     if (strcmp(name, "ping") == 0) {
         Discord::Bot::MessageResponse response;
-
-#ifdef _DISCORD_CLIENT_DEBUG
-        String msg("Uplink online. Uptime: ");
-        msg += millis();
-        msg += "ms, Stack remaining: ";
-        msg += uxTaskGetStackHighWaterMark(NULL);
-        msg += "b";
-        response.content = msg.c_str();
-#else
-        response.content = "Uplink online.";
-#endif
+        response.content = String("ESP32 uplink online.");
         discord.sendCommandResponse(
             Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
             response
@@ -104,8 +102,7 @@ void on_discord_interaction(const char* name, const JsonObject& interaction) {
         uint64_t id;
         if (interaction.containsKey("member")) {
             id = interaction["member"]["user"]["id"];
-        }
-        else {
+        } else {
             id = interaction["user"]["id"];
         }
 
@@ -114,21 +111,20 @@ void on_discord_interaction(const char* name, const JsonObject& interaction) {
             if (id != botOwnerIds[i]) continue;
 
             authorised = true;
-            response.content = "Command acknowledged. Initiating remote wake sequence.";
+            response.content = String("Magic packet sent");
             discord.sendCommandResponse(
                 Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
                 response
             );
             if (WOL.sendMagicPacket(macAddress)) {
                 Serial.println("[WOL] Packet sent.");
-            }
-            else {
+            } else {
                 Serial.println("[WOL] Packet failed to send.");
             }
         }
 
         if (!authorised) {
-            response.content = "Access denied.";
+            response.content = String("Access denied.");
             response.flags = Discord::Bot::MessageResponse::Flags::EPHEMERAL;
             discord.sendCommandResponse(
                 Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
@@ -139,8 +135,7 @@ void on_discord_interaction(const char* name, const JsonObject& interaction) {
     else if (strcmp(name, "wanip") == 0) {
         Discord::Bot::MessageResponse response;
         String wanIP = getWANIP();  
-        String msg = "Current WAN IP: " + wanIP;
-        response.content = msg.c_str();
+        response.content = "Current WAN IP: " + wanIP;
         discord.sendCommandResponse(
             Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
             response
@@ -148,162 +143,157 @@ void on_discord_interaction(const char* name, const JsonObject& interaction) {
     }
     else if (strcmp(name, "pcstatus") == 0) {
         Discord::Bot::MessageResponse response;
-        response.content = checkStatus("PC", PCTargetIP).c_str();
+        response.content = checkStatus("PC", PCTargetIP);
         discord.sendCommandResponse(
             Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
             response
         );
     }
-    else if (strcmp(name, "psstatus") == 0) {
-        Discord::Bot::MessageResponse response;
-        response.content = checkStatus("PS", PSTargetIP).c_str();
-        discord.sendCommandResponse(
-            Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
-            response
-        );
-    }
+    // else if (strcmp(name, "psstatus") == 0) {
+    //     Discord::Bot::MessageResponse response;
+    //     response.content = checkStatus("PS", PSTargetIP);
+    //     discord.sendCommandResponse(
+    //         Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
+    //         response
+    //     );
+    // }
 
     vTaskDelay(500);
 }
 
-
 void registerCommands() {
     Serial.println("Registering commands...");
     Discord::Interactions::ApplicationCommand cmd;
-    // 1. /ping
+
     cmd.name = "ping";
     cmd.type = Discord::Interactions::CommandType::CHAT_INPUT;
     cmd.description = "Ping the bot for a response.";
-    cmd.default_member_permissions = 2147483648; //Use Application Commands
+    Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
 
-    uint64_t id = Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
-    if (id == 0) {
-        Serial.println("Command registration failed!");
-    }
-    else {
-        Serial.print("Registered ping command to id ");
-        Serial.println(id);
-    }
-
-    //2. /wake
     cmd.name = "wake";
     cmd.type = Discord::Interactions::CommandType::CHAT_INPUT;
-    cmd.description = "Send a wake signal to the main terminal. Authorized users only.";
-    cmd.default_member_permissions = 2147483648;
+    cmd.description = "Send wake signal to PC.";
+    Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
 
-    id = Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
-    if (id == 0) {
-        Serial.println("Command registration failed!");
-    }
-    else {
-        Serial.print("Registered wake command to id ");
-        Serial.println(id);
-    }
-
-    //3. /wanIP
     cmd.name = "wanip";
     cmd.type = Discord::Interactions::CommandType::CHAT_INPUT;
-    cmd.description = "Get the current WAN IP of the ESP32.";
-    cmd.default_member_permissions = 2147483648;
+    cmd.description = "Get WAN IP address.";
+    Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
 
-    id = Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
-    if (id == 0) {
-        Serial.println("Command registration failed!");
-    } else {
-        Serial.print("Registered wanip command to id ");
-        Serial.println(id);
-    }
-
-    // /pcstatus
     cmd.name = "pcstatus";
-    cmd.description = "Check if PC is online or offline.";
+    cmd.description = "Check if PC is online.";
     Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
 
-    // /psstatus
-    cmd.name = "psstatus";
-    cmd.description = "Check if PS is online or offline.";
-    Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
-
-
+    // cmd.name = "psstatus";
+    // cmd.description = "Check if PS is online.";
+    // Discord::Interactions::registerGlobalCommand(discord.applicationId(), cmd, botToken);
 }
 
-// PROGRAM BEGIN
+// ===== TELEGRAM HANDLER =====
+bool isAuthorized(String chat_id) {
+  for (int i = 0; i < sizeof(telegramOwnerIds) / sizeof(telegramOwnerIds[0]); ++i) {
+    if (chat_id == String(telegramOwnerIds[i])) return true;
+  }
+  return false;
+}
 
-// put your setup code here, to run once:
+void handleNewMessages(int numNewMessages) {
+  for (int i = 0; i < numNewMessages; i++) {
+    String chat_id = String(telegramBot.messages[i].chat_id);
+    String text = telegramBot.messages[i].text;
+    Serial.printf("[TELEGRAM] Received: %s from %s\n", text.c_str(), chat_id.c_str());
+
+    if (text == "/ping") {
+      telegramBot.sendMessage(chat_id, "ESP uplink online.", "");
+    } 
+    else if (text == "/wanip") {
+      telegramBot.sendMessage(chat_id, "WAN IP is: " + getWANIP(), "");
+    } 
+    else if (text == "/wake") {
+      if (isAuthorized(chat_id)) {
+        if (WOL.sendMagicPacket(macAddress)) {
+          telegramBot.sendMessage(chat_id, "Magic packet sent", "");
+        } else {
+          telegramBot.sendMessage(chat_id, "Failed to send magic packet.", "");
+        }
+      } else {
+        telegramBot.sendMessage(chat_id, "Access denied.", "");
+      }
+    }
+    else if (text == "/pcstatus") {
+      telegramBot.sendMessage(chat_id, checkStatus("PC", PCTargetIP), "");
+    }
+    // else if (text == "/psstatus") {
+    //   telegramBot.sendMessage(chat_id, checkStatus("PS", PSTargetIP), "");
+    // }
+    // else if (text == "/start") {
+    //     telegramEnabled = true;
+    //     botEnabled = false;  // tắt Discord
+    //     lastTelegramMessageTime = millis(); // reset timeout
+    //     telegramBot.sendMessage(chat_id, "✅ Telegram bot is ON.\n⛔ Discord bot is OFF.", "");
+    // }
+    // else if (text == "/stop") {
+    //     telegramEnabled = false;
+    //     botEnabled = true;   // bật lại Discord khi Telegram tắt
+    //     telegramBot.sendMessage(chat_id, "🛑 Telegram bot is OFF.\n✅ Discord bot is ON.", "");
+    // }
+
+    else {
+      telegramBot.sendMessage(chat_id, "Unknown command.", "");
+    }
+  }
+}
+
+// ===== SETUP =====
 void setup() {
-    // Clear the serial port buffer and set the serial port baud rate to 115200.
     Serial.begin(115200);
     Serial.println("[STATUS] Standby.");
-    Serial.print("[CONFIG] Target MAC address set to ");
+    Serial.print("[CONFIG] Target MAC address: ");
     Serial.println(macAddress);
-    Serial.print("[CONFIG] Default network set to ");
+    Serial.print("[CONFIG] Default network: ");
     Serial.println(wifiSSID);
     wifiMulti.addAP(wifiSSID, wifiPassword);
+
+    secured_client.setInsecure(); // Disable SSL validation for Telegram
 
     discord.onInteraction(on_discord_interaction);
 }
 
-#ifdef _DISCORD_CLIENT_DEBUG
-long lastStackValue = 0;
-long lastStackCheck = 0;
-long lastHeapValue = 0;
-#endif
-
+// ===== LOOP =====
 void loop() {
-    // put your main code here, to run repeatedly:
     unsigned long now = millis();
 
-    //Current record:
-    //Loop() - Free Stack Space: 3132
-#ifdef _DISCORD_CLIENT_DEBUG
-    if (now - lastStackCheck >= 2000) {
-        // Print unused stack for the task that is running loop()
-        long currentStack = uxTaskGetStackHighWaterMark(NULL);
-        if (currentStack != lastStackValue) {
-            Serial.print("[STACK CHANGE] Loop() - Free Stack Space: ");
-            Serial.print(currentStack);
-            Serial.print(" (");
-            Serial.print(currentStack - lastStackValue);
-            Serial.println(")");
-            lastStackValue = currentStack;
-        }
-        long currentFree = esp_get_free_heap_size();
-        if (currentFree != lastHeapValue) {
-            Serial.print("[HEAP CHANGE] - Free Heap Space: ");
-            Serial.print(currentFree);
-            Serial.print(" (");
-            Serial.print(currentFree - lastHeapValue);
-            Serial.println(")");
-            lastHeapValue = currentFree;
-        }
-        lastStackCheck = now;
-    }
-#endif
-
     if (!update_wifi_status()) {
-        Serial.println("[WIFI] Wi-Fi connection not established.");
+        Serial.println("[WIFI] Not connected.");
         vTaskDelay(10000);
         return;
     }
 
+    // ===== Discord Handling =====
     if (botEnabled) {
-        if (!discord.online()) {
-            Serial.println("[STATUS] Connecting to Discord.");
-            if (now > lastLoginAttempt) {
-                lastLoginAttempt = now + LOGIN_INTERVAL;
-                discord.login(4096); // DIRECT_MESSAGES
-            }
+        if (!discord.online() && millis() > lastLoginAttempt) {
+            lastLoginAttempt = millis() + LOGIN_INTERVAL;
+            discord.login(4096);
         }
-        else {
-            if (!commandsRegistered) {
-                registerCommands();
-                commandsRegistered = true;
-            }
-            //Serial.println("[STATUS] Idle.");
+        discord.update(millis());
+    }
+    // ===== Telegram Handling =====
+    if (millis() - lastCheckTime > botPollingInterval) {
+        int numNewMessages = telegramBot.getUpdates(telegramBot.last_message_received + 1);
+        if (numNewMessages) {
+            handleNewMessages(numNewMessages); // handle /start, /stop...
+            lastTelegramMessageTime = millis(); // cập nhật thời điểm nhận tin nhắn mới
         }
-        discord.update(now);
+        lastCheckTime = millis();
     }
-    else {
-        Serial.println("[STATUS] Offline Idle.");
+
+    // Timeout nếu không có tin nhắn trong TELEGRAM_TIMEOUT
+    if (telegramEnabled && (millis() - lastTelegramMessageTime > TELEGRAM_TIMEOUT)) {
+        telegramEnabled = false;
+        botEnabled = true; // bật lại Discord
+        Serial.println("[TELEGRAM] Timeout, no new messages, turn OFF Telegram bot, turn ON Discord.");
     }
+
+
+
 }

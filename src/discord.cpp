@@ -1,3 +1,20 @@
+/*
+ * ESP32-Discord-WakeOnCommand v0.1
+ * Copyright (C) 2023  Neo Ting Wei Terrence
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 #include <discord.h>
 #include <freertos/FreeRTOS.h>
@@ -146,9 +163,8 @@ namespace Discord {
         StaticJsonDocument<512> doc;
         doc["type"] = static_cast<unsigned short>(type);
         JsonObject data = doc.createNestedObject("data");
-        if (response.tts) {
-            data["tts"] = true;
-        }
+
+        if (response.tts) data["tts"] = true;
 
         /*
         This theory and its following safeguard is currently untested.
@@ -159,22 +175,14 @@ namespace Discord {
         to notify users the bot is being overloaded, and the bot will fail to respond to subsequent interactions until
         the existing responses have been sent out.
         */
-        if (esp_get_free_heap_size() > 2 * (4 * 1024 + 256)) {
-            data["content"] = response.content;
+        if (response.content.length() > 0) {
+        data["content"] = response.content; // ArduinoJson sẽ copy từ String
+        } else {
+            data["content"] = ""; // tránh null
         }
-        else {
-            String msg((char*)0);
-            msg.reserve(strlen(response.content) + 102);
-            msg += response.content;
-            msg += "\n\n**Warning: Not enough memory for further processing. Please wait before sending further commands.**";
-            data["content"] = msg;
-        }
-
 
         if (static_cast<uint8_t>(response.flags)) {
             data["flags"] = static_cast<uint8_t>(response.flags);
-            Serial.print("Flags: ");
-            Serial.println(static_cast<uint8_t>(response.flags));
         }
 
         sendCommandResponse(type, doc);
@@ -230,11 +238,13 @@ namespace Discord {
 
     void Bot::parseMessage(uint8_t * payload, size_t length) {
         //Deserialize the first part of our payload
-        StaticJsonDocument<1024> doc;
-        DeserializationError error = deserializeJson(doc, payload, length);
-
-        if (!error) {
-            _outerCallback(Event::MessageCreate, doc);
+        DynamicJsonDocument doc(2048);
+        DeserializationError e = deserializeJson(doc, payload, length);
+        if (e) {
+            Serial.print("Payload deserializeJson() call failed with code ");
+            Serial.println(e.c_str());
+            // Handle the error here, don't pass it upward.
+            return;
         }
 
 #ifdef _DISCORD_CLIENT_DEBUG
