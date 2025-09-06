@@ -222,7 +222,7 @@ namespace Discord {
             };
 
             bool tts = false;
-            const char* content = "";
+            String content = "";
             // TODO: array of embed objects, 
             // allowed_mentions object, 
             // array of components, 

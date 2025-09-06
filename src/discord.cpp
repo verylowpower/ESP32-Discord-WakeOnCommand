@@ -163,9 +163,8 @@ namespace Discord {
         StaticJsonDocument<512> doc;
         doc["type"] = static_cast<unsigned short>(type);
         JsonObject data = doc.createNestedObject("data");
-        if (response.tts) {
-            data["tts"] = true;
-        }
+
+        if (response.tts) data["tts"] = true;
 
         /*
         This theory and its following safeguard is currently untested.
@@ -176,22 +175,14 @@ namespace Discord {
         to notify users the bot is being overloaded, and the bot will fail to respond to subsequent interactions until
         the existing responses have been sent out.
         */
-        if (esp_get_free_heap_size() > 2 * (4 * 1024 + 256)) {
-            data["content"] = response.content;
+        if (response.content.length() > 0) {
+        data["content"] = response.content; // ArduinoJson sẽ copy từ String
+        } else {
+            data["content"] = ""; // tránh null
         }
-        else {
-            String msg((char*)0);
-            msg.reserve(strlen(response.content) + 102);
-            msg += response.content;
-            msg += "\n\n**Warning: Not enough memory for further processing. Please wait before sending further commands.**";
-            data["content"] = msg;
-        }
-
 
         if (static_cast<uint8_t>(response.flags)) {
             data["flags"] = static_cast<uint8_t>(response.flags);
-            Serial.print("Flags: ");
-            Serial.println(static_cast<uint8_t>(response.flags));
         }
 
         sendCommandResponse(type, doc);
