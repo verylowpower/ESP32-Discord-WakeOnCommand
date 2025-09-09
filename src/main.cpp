@@ -275,8 +275,17 @@ void loop() {
             lastLoginAttempt = millis() + LOGIN_INTERVAL;
             discord.login(4096);
         }
+
         discord.update(millis());
+
+        // ✅ Đăng ký slash command một lần khi bot online
+        if (discord.online() && !commandsRegistered) {
+            registerCommands();
+            commandsRegistered = true;
+            Serial.println("[DISCORD] Commands registration attempted.");
+        }
     }
+    
     // ===== Telegram Handling =====
     if (millis() - lastCheckTime > botPollingInterval) {
         int numNewMessages = telegramBot.getUpdates(telegramBot.last_message_received + 1);
