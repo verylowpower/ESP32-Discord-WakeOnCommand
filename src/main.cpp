@@ -265,7 +265,7 @@ void loop() {
 
     if (!update_wifi_status()) {
         Serial.println("[WIFI] Not connected.");
-        vTaskDelay(10000);
+        delay(1000);
         return;
     }
 
@@ -302,7 +302,4 @@ void loop() {
         botEnabled = true; // bật lại Discord
         Serial.println("[TELEGRAM] Timeout, no new messages, turn OFF Telegram bot, turn ON Discord.");
     }
-
-
-
 }
