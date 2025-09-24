@@ -1,0 +1,34 @@
+// #ifndef PRIVATECONFIG_H
+// #define PRIVATECONFIG_H
+
+// //Default wifi parameters
+// const char* wifiSSID = "ZTE-2.4G";
+// const char* wifiPassword = "duong1234";
+
+// //MAC address of the target device
+// const char* macAddress = "cc:28:aa:a8:48:68";
+// //const char* macAddress = "10:4a:7d:72:cc:e8";
+
+// //-----Discord Bot Configuration-----
+// //Secret bot token
+// const char* botToken = "MTQwNjg1NjY3OTQ5MjE1NzYxNA.GLdZvK.WReWLqhJFfXrA2VKd1M7-XH3oYYt2pqPpVv2-Y";
+
+// // Discord Application ID
+// //const uint64_t applicationId = {1406856679492157614};
+// const uint64_t applicationId = {1415005327828455465};
+
+// //Bot owner's user IDs
+// uint64_t botOwnerIds[] = {
+//     729164327915094119ULL
+// };
+
+// // //-----Telegram Bot Configuration-----
+// const char* telegramToken = "7468259389:AAFqk19W5RXNriy6XNAUIbBQjs-sHbAF26U";
+
+// const char* telegramOwnerIds[] = {"5571208360"};
+
+// //-----Target Device Configuration-----
+// const char* PCTargetIP = "192.168.1.150";
+// const char* PSTargetIP = "192.168.1.100";
+
+// #endif //PRIVATECONFIG_H
