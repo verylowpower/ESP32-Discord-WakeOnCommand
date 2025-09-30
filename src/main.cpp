@@ -1,3 +1,21 @@
+/*
+ * ESP32-Discord-WakeOnCommand v0.1
+ * Copyright (C) 2023  Neo Ting Wei Terrence
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <WiFiMulti.h>
@@ -91,7 +109,7 @@ void on_discord_interaction(const char* name, const JsonObject& interaction) {
 
     if (strcmp(name, "ping") == 0) {
         Discord::Bot::MessageResponse response;
-        response.content = String("ESP32 uplink online.");
+        response.content = String("Bot uplink online.");
         discord.sendCommandResponse(
             Discord::Bot::InteractionResponse::CHANNEL_MESSAGE_WITH_SOURCE,
             response
@@ -230,12 +248,12 @@ void handleNewMessages(int numNewMessages) {
     //     telegramEnabled = true;
     //     botEnabled = false;  // tắt Discord
     //     lastTelegramMessageTime = millis(); // reset timeout
-    //     telegramBot.sendMessage(chat_id, "✅ Telegram bot is ON.\n⛔ Discord bot is OFF.", "");
+    //     telegramBot.sendMessage(chat_id, "Telegram bot is ON.\n Discord bot is OFF.", "");
     // }
     // else if (text == "/stop") {
     //     telegramEnabled = false;
     //     botEnabled = true;   // bật lại Discord khi Telegram tắt
-    //     telegramBot.sendMessage(chat_id, "🛑 Telegram bot is OFF.\n✅ Discord bot is ON.", "");
+    //     telegramBot.sendMessage(chat_id, "Telegram bot is OFF.\n Discord bot is ON.", "");
     // }
 
     else {
@@ -243,6 +261,29 @@ void handleNewMessages(int numNewMessages) {
     }
   }
 }
+
+// ===== AUTO RESET CONFIG =====
+const unsigned long RESET_INTERVAL = 8UL * 60UL * 60UL * 1000UL; // 5 tiếng
+//const unsigned long RESET_INTERVAL = 1UL * 60UL * 1000UL; // 1 phút
+unsigned long startTime = 0;  
+
+void sendResetNotification() {
+    Serial.println("[SYSTEM] Sending reset notification...");
+
+    HTTPClient http;
+    http.begin(discordWebhookURL);
+    http.addHeader("Content-Type", "application/json");
+    String payload = "{\"content\":\"Bot is restarting \"}";
+    int httpCode = http.POST(payload);
+    http.end();
+
+    if (telegramEnabled) {
+        for (int i = 0; i < sizeof(telegramOwnerIds) / sizeof(telegramOwnerIds[0]); i++) {
+            telegramBot.sendMessage(String(telegramOwnerIds[i]), "Bot is restarting", "");
+        }
+    }
+}
+
 
 // ===== SETUP =====
 void setup() {
@@ -254,15 +295,14 @@ void setup() {
     Serial.println(wifiSSID);
     wifiMulti.addAP(wifiSSID, wifiPassword);
 
-    secured_client.setInsecure(); // Disable SSL validation for Telegram
-
+    secured_client.setInsecure();
     discord.onInteraction(on_discord_interaction);
+
+    startTime = millis(); 
 }
 
-// ===== LOOP =====
-void loop() {
-    unsigned long now = millis();
 
+void loop() {
     if (!update_wifi_status()) {
         Serial.println("[WIFI] Not connected.");
         delay(1000);
@@ -278,28 +318,36 @@ void loop() {
 
         discord.update(millis());
 
-        // ✅ Đăng ký slash command một lần khi bot online
         if (discord.online() && !commandsRegistered) {
             registerCommands();
             commandsRegistered = true;
             Serial.println("[DISCORD] Commands registration attempted.");
         }
     }
-    
+
     // ===== Telegram Handling =====
     if (millis() - lastCheckTime > botPollingInterval) {
         int numNewMessages = telegramBot.getUpdates(telegramBot.last_message_received + 1);
         if (numNewMessages) {
-            handleNewMessages(numNewMessages); // handle /start, /stop...
-            lastTelegramMessageTime = millis(); // cập nhật thời điểm nhận tin nhắn mới
+            handleNewMessages(numNewMessages);
+            lastTelegramMessageTime = millis();
         }
         lastCheckTime = millis();
     }
 
-    // Timeout nếu không có tin nhắn trong TELEGRAM_TIMEOUT
+    /*
     if (telegramEnabled && (millis() - lastTelegramMessageTime > TELEGRAM_TIMEOUT)) {
         telegramEnabled = false;
-        botEnabled = true; // bật lại Discord
+        botEnabled = true;
         Serial.println("[TELEGRAM] Timeout, no new messages, turn OFF Telegram bot, turn ON Discord.");
     }
+    */
+
+    if (millis() - startTime >= RESET_INTERVAL) {
+        Serial.println("[SYSTEM] 5 hours passed -> Restarting Bot...");
+        sendResetNotification();
+        delay(2000);
+        ESP.restart();
+    }
 }
+

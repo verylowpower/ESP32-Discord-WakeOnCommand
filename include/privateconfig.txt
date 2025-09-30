@@ -8,14 +8,14 @@ const char* wifiPassword = "";
 //MAC address of the target device
 const char* macAddress = "";
 
-
 //-----Discord Bot Configuration-----
 //Secret bot token
 const char* botToken = "";
 
 // Discord Application ID
-//const uint64_t applicationId = {};
 const uint64_t applicationId = {};
+
+const char* discordWebhookURL = "";
 
 //Bot owner's user IDs
 uint64_t botOwnerIds[] = {
